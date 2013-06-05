@@ -20,7 +20,7 @@ This gives $\hat{a}_{kg}$ and a standard error, we'll denote $s_{kg}$. (Note tha
 all at once, the residual variance will tend to be overestimated, so $s_{kg}$ will tend to overestimate the standard error).
 
 2. Run the $g$ vectors $ahat_k, s_k$ through ASH to shrink them.
-You'll have to download ASH from my github repo BayesFDR, and look
+You'll have to download ASH from my github repo ash, and look
 at the readme to see what it is doing.
 But bottom line is that it will provide "shrunk" estimates for $ahat_{kg}$.
 
@@ -31,34 +31,119 @@ and then this could be used to get a revised estimate of the standard error $s_{
 4. Test the residuals for association with genotype.
 
 Here is a start at writing R code for this:
+First read in ash functions
+```{r}
+ash.repodir = scan("../.ash.repodir.txt",what=character()) #say where on your computer you have the ash repo
+source(file.path(ash.repodir,"/Rcode/ash.R"))
+```
+
+
+
 ```{r}
 #INPUT: Y an n by g matrix of phenotypes
 # X an n by K matrix of covariates (Typically columns of X will be the PCs, and K=n since there are n PCs)
 #scaleY a bool saying whether to scale Y to have unit variance
 correctY = function(Y,X,scaleY=FALSE){
-X = scale(X, scale=FALSE) #remove column means
-Y = scale(Y,scale=scaleY) #remove column means, and 
+K=ncol(X)
+g=ncol(Y)
+#X = scale(X, scale=FALSE) #remove column means
+#Y = scale(Y,scale=scaleY) #remove column means, and  scale if scale=T
 SX2 = colSums(X*X) #a K vector of sums of squares
 EY2 = colMeans(Y*Y) #variance of Y
 betahat = SX2^{-1} * (t(X) %*% Y) # a K by g matrix
-resid = Y- X %*% betahat # residuals, K by g
-sigmahat = colMeans(resid*resid) # K vector, estimated residual variances
-sebetahat = SX2^{-1} * sigmahat
-return(list(betahat, sebetahat))
+betahat.shrunk = matrix(0,nrow=K,ncol=g)
+for(k in 1:K){
+  resid = Y- outer(X[,k],betahat[k,]) # residuals, n by g
+  sigmahat = sqrt(colMeans(resid*resid)) # g vector, estimated residual variances
+  sebetahat = SX2[k]^{-1} * sigmahat
+  betahat.shrunk[k,] = ash(betahat[k,],sebetahat,prior="uniform")$PosteriorMean
+}
+Ycorr = Y-X %*% betahat.shrunk # Y corrected for the effects of X 
+return(list(Ycorr=Ycorr, betahat=betahat, betahat.shrunk = betahat.shrunk))
 }
 ```
 
 Here we'll simulate some data based on latent factors $Z$
 ```{r}
-n=100
-G=1000
-K=14
-L = matrix(rnorm(K*n),nrow=n) #n by k matrix of loadings
-F = matrix(rnorm(K*G),nrow=K) #K by g matrix of factors
-Y= L %*% F + matrix(rnorm(n*G),nrow=n)
-Y.pr=prcomp(Y)
+set.seed(124)
+n=100  #number of "individuals"
+G=1000 #number of "genes"
+K=14 # number of "Factors"
+lambda = (0.9)^(1:K)
+L = matrix(rnorm(K*n),nrow=n) %*% diag(lambda) #n by k matrix of loadings
+FF = matrix(rnorm(K*G),nrow=K) #K by g matrix of factors
+E = matrix(rnorm(n*G),nrow=n)
+Y= L %*% FF + E
+Y = scale(Y)
+
+Y.svd=svd(Y)
+plot(Y.svd$d,ylab="singular values") #singular values
+X= Y.svd$u # columns of X are PCs (n n-vectors)
+Y.corr = correctY(Y,X)
 ```
 
+Note that the early eigenvectors are shrunk only a little, whereas
+the 15 and higher are shrunk very strongly
+```{r}
+plot(Y.corr$betahat[1,],Y.corr$betahat.shrunk[1,],ylim=c(-4,4))
+abline(a=0,b=1)
+plot(Y.corr$betahat[7,],Y.corr$betahat.shrunk[7,],ylim=c(-4,4))
+abline(a=0,b=1)
+plot(Y.corr$betahat[14,],Y.corr$betahat.shrunk[14,],ylim=c(-4,4))
+abline(a=0,b=1)
+plot(Y.corr$betahat[15,],Y.corr$betahat.shrunk[15,],ylim=c(-4,4))
+abline(a=0,b=1)
+```
+
+Ideally the corrected Y should look something like E, so check this:
+```{r}
+plot(E,Y.corr$Ycorr)
+```
+This is a little worrying - although the two are correlated,
+the variance of the corrected Ys is much
+smaller than that of E, suggesting maybe we are "overcorrecting".
+This said, for gene expression studies it could be argued
+that we don't care too much about overcorrecting, as long as the correlation between the corrected Y and E is good.
+
+Let's compare with just correcting on the basis of the first k PCs.
+```{r}
+#this function returns estimate of $Y$ from truncating the svd, which
+#is like correcting for the first k PCs
+trunc.svd = function(Y.svd, k){
+  Y.svd$u[,1:k] %*% diag(Y.svd$d[1:k]) %*% t(Y.svd$v[,1:k])
+}
+plot(E,Y-trunc.svd(Y.svd,14))
+plot(Y.corr$Ycorr,Y-trunc.svd(Y.svd,14))
+```
+So it is somewhat similar.
+
+We could use correlation between E and the corrected Y as a measure of 
+how well we are doing. (Maybe would be better to do this column by column and look at the average correlation, rather than pooling everything together.)
+```{r}
+cor(as.vector(Y.corr$Ycorr),as.vector(E))
+cor(as.vector(Y-trunc.svd(Y.svd,12)),as.vector(E))
+cor(as.vector(Y-trunc.svd(Y.svd,14)),as.vector(E))
+cor(as.vector(Y-trunc.svd(Y.svd,16)),as.vector(E))
+cor(as.vector(Y-trunc.svd(Y.svd,20)),as.vector(E))
+```
+So we can see that by this measure correcting for 14 PCs does best
+(which is kind of expected given the way the data were simulated).
+The shrinkage does worse than this, but better than only
+doing 12 PCs, and better than doing 20 PCs.
+
+## An alternative idea
+
+Another idea would be to ``correct" each gene by all the other genes, rather
+than by the PCs. This might avoid the overfitting problem, because it avoids first choosing the PCs by looking at the data.
+To investigate we'll try correcting the first J genes using all the others.
+```{r}
+J=10
+Y1.corr = correctY(Y[,1:J],Y[,-(1:J)])
+plot(Y1.corr$Ycorr,E[,1:J])
+```
+That doesn't work at all! This is because the Y[,-(1:J)] are not at all
+orthogonal to one another, and the correctY function really assumes they
+are orthogonal.
 
 # Miscellenous
 
