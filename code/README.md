@@ -220,6 +220,8 @@ will cause overfitting/undershrinkage.
 
 To avoid this we could try cross validation.
 
+Note this code is wrong!! Need to project Y1 onto PCs
+from Y2 to get the X by which it is to be corrected?
 
 ```r
 Y1 = Y[1:50, ]
@@ -246,8 +248,7 @@ cor(as.vector(Ycv.corr), as.vector(E))
 ```
 
 
-so this does better in terms of the overfitting, but worse
-in terms of correlation? Better check this out in more detail.
+
 
 ## An alternative idea
 
