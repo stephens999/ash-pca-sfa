@@ -131,6 +131,33 @@ So we can see that by this measure correcting for 14 PCs does best
 The shrinkage does worse than this, but better than only
 doing 12 PCs, and better than doing 20 PCs.
 
+## Cross validation
+
+The undershrinkage could be due to overfitting. The
+PCs are selected from the data, so the effects of each PC will be systematically overestimated on average, and this
+will cause overfitting/undershrinkage.
+
+To avoid this we could try cross validation.
+
+Note this code is wrong!! Need to project Y1 onto PCs
+from Y2 to get the X by which it is to be corrected?
+```{r}
+Y1 =Y[1:50,]
+Y2 =Y[51:100,]
+Y1.svd=svd(Y1)
+Y2.svd = svd(Y2)
+
+X1= Y1.svd$u # columns of X are PCs (n n-vectors)
+X2= Y2.svd$u
+Y1.corr = correctY(Y1,X2)
+Y2.corr = correctY(Y2,X1)
+Ycv.corr = rbind(Y1.corr$Ycorr,Y2.corr$Ycorr)
+plot(E,Ycv.corr)
+cor(as.vector(Ycv.corr),as.vector(E))
+```
+
+
+
 ## An alternative idea
 
 Another idea would be to ``correct" each gene by all the other genes, rather

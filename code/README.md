@@ -212,6 +212,43 @@ So we can see that by this measure correcting for 14 PCs does best
 The shrinkage does worse than this, but better than only
 doing 12 PCs, and better than doing 20 PCs.
 
+## Cross validation
+
+The undershrinkage could be due to overfitting. The
+PCs are selected from the data, so the effects of each PC will be systematically overestimated on average, and this
+will cause overfitting/undershrinkage.
+
+To avoid this we could try cross validation.
+
+
+```r
+Y1 = Y[1:50, ]
+Y2 = Y[51:100, ]
+Y1.svd = svd(Y1)
+Y2.svd = svd(Y2)
+
+X1 = Y1.svd$u  # columns of X are PCs (n n-vectors)
+X2 = Y2.svd$u
+Y1.corr = correctY(Y1, X2)
+Y2.corr = correctY(Y2, X1)
+Ycv.corr = rbind(Y1.corr$Ycorr, Y2.corr$Ycorr)
+plot(E, Ycv.corr)
+```
+
+![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8.png) 
+
+```r
+cor(as.vector(Ycv.corr), as.vector(E))
+```
+
+```
+## [1] 0.4871
+```
+
+
+so this does better in terms of the overfitting, but worse
+in terms of correlation? Better check this out in more detail.
+
 ## An alternative idea
 
 Another idea would be to ``correct" each gene by all the other genes, rather
@@ -224,7 +261,7 @@ Y1.corr = correctY(Y[, 1:J], Y[, -(1:J)])
 plot(Y1.corr$Ycorr, E[, 1:J])
 ```
 
-![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8.png) 
+![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9.png) 
 
 That doesn't work at all! This is because the Y[,-(1:J)] are not at all
 orthogonal to one another, and the correctY function really assumes they
