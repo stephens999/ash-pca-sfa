@@ -34,6 +34,7 @@ Here is a start at writing R code for this:
 First read in ash functions
 
 ```r
+setwd("~/Documents/git/ash-pca-sfa/code")
 ash.repodir = scan("../.ash.repodir.txt", what = character())  #say where on your computer you have the ash repo
 source(file.path(ash.repodir, "/Rcode/ash.R"))
 ```
@@ -83,7 +84,7 @@ L = matrix(rnorm(K * n), nrow = n) %*% diag(lambda)  #n by k matrix of loadings
 FF = matrix(rnorm(K * G), nrow = K)  #K by g matrix of factors
 E = matrix(rnorm(n * G), nrow = n)
 Y = L %*% FF + E
-Y = scale(Y)
+# Y = scale(Y) #centers and scales each gene
 
 Y.svd = svd(Y)
 plot(Y.svd$d, ylab = "singular values")  #singular values
@@ -137,11 +138,6 @@ plot(E, Y.corr$Ycorr)
 
 ![plot of chunk unnamed-chunk-5](figure/unnamed-chunk-5.png) 
 
-This is a little worrying - although the two are correlated,
-the variance of the corrected Ys is much
-smaller than that of E, suggesting maybe we are "overcorrecting".
-This said, for gene expression studies it could be argued
-that we don't care too much about overcorrecting, as long as the correlation between the corrected Y and E is good.
 
 Let's compare with just correcting on the basis of the first k PCs.
 
@@ -149,7 +145,8 @@ Let's compare with just correcting on the basis of the first k PCs.
 # this function returns estimate of $Y$ from truncating the svd, which is
 # like correcting for the first k PCs
 trunc.svd = function(Y.svd, k) {
-    Y.svd$u[, 1:k] %*% diag(Y.svd$d[1:k]) %*% t(Y.svd$v[, 1:k])
+    Y.svd$u[, 1:k, drop = F] %*% diag(Y.svd$d[1:k, drop = F], nrow = length(Y.svd$d[1:k, 
+        drop = F])) %*% t(Y.svd$v[, 1:k, drop = F])
 }
 plot(E, Y - trunc.svd(Y.svd, 14))
 ```
@@ -168,44 +165,15 @@ We could use correlation between E and the corrected Y as a measure of
 how well we are doing. (Maybe would be better to do this column by column and look at the average correlation, rather than pooling everything together.)
 
 ```r
-cor(as.vector(Y.corr$Ycorr), as.vector(E))
+cc = rep(0, 30)
+for (i in 2:30) {
+    cc[i] = cor(as.vector(Y - trunc.svd(Y.svd, i)), as.vector(E))
+}
+plot(cc)
+abline(h = cor(as.vector(Y.corr$Ycorr), as.vector(E)))
 ```
 
-```
-## [1] 0.8626
-```
-
-```r
-cor(as.vector(Y - trunc.svd(Y.svd, 12)), as.vector(E))
-```
-
-```
-## [1] 0.861
-```
-
-```r
-cor(as.vector(Y - trunc.svd(Y.svd, 14)), as.vector(E))
-```
-
-```
-## [1] 0.896
-```
-
-```r
-cor(as.vector(Y - trunc.svd(Y.svd, 16)), as.vector(E))
-```
-
-```
-## [1] 0.8787
-```
-
-```r
-cor(as.vector(Y - trunc.svd(Y.svd, 20)), as.vector(E))
-```
-
-```
-## [1] 0.8452
-```
+![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7.png) 
 
 So we can see that by this measure correcting for 14 PCs does best
 (which is kind of expected given the way the data were simulated).
@@ -214,18 +182,17 @@ doing 12 PCs, and better than doing 20 PCs.
 
 ## Cross validation
 
-The undershrinkage could be due to overfitting. The
+One could worry about overfitting: the
 PCs are selected from the data, so the effects of each PC will be systematically overestimated on average, and this
-will cause overfitting/undershrinkage.
+could cause overfitting/undershrinkage.
 
-To avoid this we could try cross validation.
+To asses whether this is a problem we try cross validation, correcting genes 1 to 500 with PCs learned from other genes, and vice versa.
 
-Note this code is wrong!! Need to project Y1 onto PCs
-from Y2 to get the X by which it is to be corrected?
+
 
 ```r
-Y1 = Y[1:50, ]
-Y2 = Y[51:100, ]
+Y1 = Y[, 1:500]
+Y2 = Y[, 501:1000]
 Y1.svd = svd(Y1)
 Y2.svd = svd(Y2)
 
@@ -233,7 +200,7 @@ X1 = Y1.svd$u  # columns of X are PCs (n n-vectors)
 X2 = Y2.svd$u
 Y1.corr = correctY(Y1, X2)
 Y2.corr = correctY(Y2, X1)
-Ycv.corr = rbind(Y1.corr$Ycorr, Y2.corr$Ycorr)
+Ycv.corr = cbind(Y1.corr$Ycorr, Y2.corr$Ycorr)
 plot(E, Ycv.corr)
 ```
 
@@ -244,7 +211,7 @@ cor(as.vector(Ycv.corr), as.vector(E))
 ```
 
 ```
-## [1] 0.4871
+## [1] 0.8636
 ```
 
 
