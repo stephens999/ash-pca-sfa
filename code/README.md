@@ -166,7 +166,7 @@ how well we are doing. (Maybe would be better to do this column by column and lo
 
 ```r
 cc = rep(0, 30)
-for (i in 2:30) {
+for (i in 1:30) {
     cc[i] = cor(as.vector(Y - trunc.svd(Y.svd, i)), as.vector(E))
 }
 plot(cc)
