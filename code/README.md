@@ -44,31 +44,7 @@ source(file.path(ash.repodir, "/Rcode/ash.R"))
 
 
 ```r
-# INPUT: Y an n by g matrix of phenotypes X an n by K matrix of covariates
-# (Typically columns of X will be the PCs, and K=n since there are n PCs)
-# scaleY a bool saying whether to scale Y to have unit variance
-correctY = function(Y, X, scaleY = FALSE) {
-    K = ncol(X)
-    g = ncol(Y)
-    # X = scale(X, scale=FALSE) #remove column means Y = scale(Y,scale=scaleY)
-    # #remove column means, and scale if scale=T
-    SX2 = colSums(X * X)  #a K vector of sums of squares
-    EY2 = colMeans(Y * Y)  #variance of Y
-    betahat = SX2^{
-        -1
-    } * (t(X) %*% Y)  # a K by g matrix
-    betahat.shrunk = matrix(0, nrow = K, ncol = g)
-    for (k in 1:K) {
-        resid = Y - outer(X[, k], betahat[k, ])  # residuals, n by g
-        sigmahat = sqrt(colMeans(resid * resid))  # g vector, estimated residual variances
-        sebetahat = SX2[k]^{
-            -1
-        } * sigmahat
-        betahat.shrunk[k, ] = ash(betahat[k, ], sebetahat, prior = "uniform")$PosteriorMean
-    }
-    Ycorr = Y - X %*% betahat.shrunk  # Y corrected for the effects of X
-    return(list(Ycorr = Ycorr, betahat = betahat, betahat.shrunk = betahat.shrunk))
-}
+source("correctY.R")
 ```
 
 
@@ -215,6 +191,16 @@ cor(as.vector(Ycv.corr), as.vector(E))
 ```
 
 
+### The Stranger Data
+
+
+```r
+setwd("~/Documents/git/ash-pca-sfa/")
+Data1 <- read.table("data/beforeCorrection_onlyExpGenes.txt.pedOrder.Transposed.allPopNorm", 
+    header = FALSE)
+xx = matrix(as.numeric(as.matrix(Data1[-1, -(1:2)])), nrow = 210)
+```
+
 
 
 ## An alternative idea
@@ -229,7 +215,7 @@ Y1.corr = correctY(Y[, 1:J], Y[, -(1:J)])
 plot(Y1.corr$Ycorr, E[, 1:J])
 ```
 
-![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9.png) 
+![plot of chunk unnamed-chunk-10](figure/unnamed-chunk-10.png) 
 
 That doesn't work at all! This is because the Y[,-(1:J)] are not at all
 orthogonal to one another, and the correctY function really assumes they

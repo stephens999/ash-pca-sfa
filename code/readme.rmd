@@ -41,27 +41,7 @@ source(file.path(ash.repodir,"/Rcode/ash.R"))
 
 
 ```{r}
-#INPUT: Y an n by g matrix of phenotypes
-# X an n by K matrix of covariates (Typically columns of X will be the PCs, and K=n since there are n PCs)
-#scaleY a bool saying whether to scale Y to have unit variance
-correctY = function(Y,X,scaleY=FALSE){
-K=ncol(X)
-g=ncol(Y)
-#X = scale(X, scale=FALSE) #remove column means
-#Y = scale(Y,scale=scaleY) #remove column means, and  scale if scale=T
-SX2 = colSums(X*X) #a K vector of sums of squares
-EY2 = colMeans(Y*Y) #variance of Y
-betahat = SX2^{-1} * (t(X) %*% Y) # a K by g matrix
-betahat.shrunk = matrix(0,nrow=K,ncol=g)
-for(k in 1:K){
-  resid = Y- outer(X[,k],betahat[k,]) # residuals, n by g
-  sigmahat = sqrt(colMeans(resid*resid)) # g vector, estimated residual variances
-  sebetahat = SX2[k]^{-1} * sigmahat
-  betahat.shrunk[k,] = ash(betahat[k,],sebetahat,prior="uniform")$PosteriorMean
-}
-Ycorr = Y-X %*% betahat.shrunk # Y corrected for the effects of X 
-return(list(Ycorr=Ycorr, betahat=betahat, betahat.shrunk = betahat.shrunk))
-}
+source("correctY.R")
 ```
 
 Here we'll simulate some data based on latent factors $Z$
@@ -152,6 +132,33 @@ plot(E,Ycv.corr)
 cor(as.vector(Ycv.corr),as.vector(E))
 ```
 
+### The Stranger Data
+
+Read in the data
+```{r}
+setwd("~/Documents/git/ash-pca-sfa/")
+Data1 <- read.table("data/beforeCorrection_onlyExpGenes.txt.pedOrder.Transposed.allPopNorm", header=FALSE)
+xx = matrix(as.numeric(as.matrix(Data1[-1,-(1:2)])),nrow=210)
+```
+
+check the first PC is, roughly, overall mean
+```{r}
+xx.svd=svd(xx)
+xx.mean=apply(xx,1,mean)
+plot(xx.mean,xx.svd$u[,1])
+```
+
+```{r}
+xx.correct = correctY(xx, xx.svd$u[,1:20])
+plot(xx.correct$betahat[1,],xx.correct$betahat.shrunk[1,])
+abline(a=0,b=1,col=2)
+plot(xx.correct$betahat[5,],xx.correct$betahat.shrunk[5,])
+abline(a=0,b=1,col=2)
+plot(xx.correct$betahat[15,],xx.correct$betahat.shrunk[15,])
+abline(a=0,b=1,col=2)
+plot(xx.correct$betahat[20,],xx.correct$betahat.shrunk[20,])
+abline(a=0,b=1,col=2)
+```
 
 
 ## An alternative idea
